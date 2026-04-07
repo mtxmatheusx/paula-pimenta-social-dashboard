@@ -1,0 +1,416 @@
+{
+  "name": "Paula Pimenta Social Analytics",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "type": "cron",
+              "value": "0 9 * * 1"
+            }
+          ]
+        },
+        "timezone": "America/Sao_Paulo"
+      },
+      "id": "Schedule_Trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~linkedin-profile-scraper/run-sync",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $secrets.APIFY_TOKEN }}"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": {
+          "json": {
+            "startUrls": [
+              {
+                "url": "https://www.linkedin.com/in/paula-valio-pimenta/"
+              }
+            ],
+            "includeProfile": true,
+            "getFollowers": true,
+            "maxPosts": 100,
+            "timeframe": "90d"
+          }
+        }
+      },
+      "id": "LinkedIn_Scraper",
+      "name": "LinkedIn Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $secrets.APIFY_TOKEN }}"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": {
+          "json": {
+            "usernames": [
+              "paulavaliopimenta"
+            ],
+            "includeUserInfo": true,
+            "includePosts": true,
+            "maxPosts": 100,
+            "timeframe": "90d",
+            "maxPostsPerPage": 100
+          }
+        }
+      },
+      "id": "Instagram_Scraper",
+      "name": "Instagram Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~tiktok-scraper/run-sync",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $secrets.APIFY_TOKEN }}"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": {
+          "json": {
+            "usernames": [
+              "paulavaliopimenta"
+            ],
+            "maxVideos": 100,
+            "includeComments": false,
+            "timeframe": "90d"
+          }
+        }
+      },
+      "id": "TikTok_Scraper",
+      "name": "TikTok Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~youtube-channel-videos/run-sync",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $secrets.APIFY_TOKEN }}"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": {
+          "json": {
+            "channelUrl": "https://www.youtube.com/@paulavaliopimenta",
+            "includeStatistics": true,
+            "maxVideos": 100,
+            "timeframe": "90d"
+          }
+        }
+      },
+      "id": "YouTube_Scraper",
+      "name": "YouTube Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        550
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "outputType": "object"
+      },
+      "id": "Merge_Results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeData(apifyResults) {\n  const normalized = [];\n\n  apifyResults.forEach(result => {\n    if (result.error) {\n      console.log(`Platform failed`);\n      return;\n    }\n\n    if (result.platform === 'linkedin') {\n      result.posts?.forEach(post => {\n        normalized.push({\n          platform: 'linkedin',\n          post_id: post.postId,\n          posted_at: new Date(post.timestamp * 1000).toISOString(),\n          content_type: post.mediaUrls?.length > 1 ? 'carousel' : (post.videoUrl ? 'video' : 'image'),\n          caption: post.content,\n          caption_length: (post.content || '').length,\n          hashtags: (post.content || '').match(/#\\w+/g) || [],\n          metrics: {\n            likes: post.likes || 0,\n            comments: post.comments || 0,\n            shares: post.reposts || 0,\n            views: post.views || 0,\n            reach: post.views || 0\n          }\n        });\n      });\n    }\n\n    if (result.platform === 'instagram') {\n      result.posts?.forEach(post => {\n        const reach = post.reach || post.videoPlayCount || post.likesCount;\n        normalized.push({\n          platform: 'instagram',\n          post_id: post.id,\n          posted_at: new Date(post.timestamp).toISOString(),\n          content_type: post.videoPlayCount ? 'video' : 'image',\n          caption: post.caption,\n          caption_length: (post.caption || '').length,\n          hashtags: (post.caption || '').match(/#\\w+/g) || [],\n          metrics: {\n            likes: post.likesCount || 0,\n            comments: post.commentsCount || 0,\n            shares: 0,\n            views: post.videoPlayCount || 0,\n            saves: post.saves || 0,\n            reach: reach\n          }\n        });\n      });\n    }\n\n    if (result.platform === 'tiktok') {\n      result.videos?.forEach(video => {\n        normalized.push({\n          platform: 'tiktok',\n          post_id: video.id,\n          posted_at: new Date(video.createTime * 1000).toISOString(),\n          content_type: 'video',\n          caption: video.desc,\n          caption_length: (video.desc || '').length,\n          hashtags: (video.desc || '').match(/#\\w+/g) || [],\n          metrics: {\n            likes: video.likeCount || 0,\n            comments: video.commentCount || 0,\n            shares: video.shareCount || 0,\n            views: video.playCount || 0,\n            reach: video.playCount || 0\n          }\n        });\n      });\n    }\n\n    if (result.platform === 'youtube') {\n      result.videos?.forEach(video => {\n        normalized.push({\n          platform: 'youtube',\n          post_id: video.videoId,\n          posted_at: new Date(video.publishedAt).toISOString(),\n          content_type: 'video',\n          caption: video.title,\n          caption_length: (video.title || '').length,\n          hashtags: [],\n          metrics: {\n            likes: video.likeCount || 0,\n            comments: video.commentCount || 0,\n            shares: 0,\n            views: video.viewCount || 0,\n            reach: video.viewCount || 0\n          }\n        });\n      });\n    }\n  });\n\n  return normalized;\n}\n\nreturn normalizeData(this.input);"
+      },
+      "id": "Transform_Data",
+      "name": "Transform Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function calculateMetrics(posts) {\n  return posts.map(post => {\n    const totalInteractions = (post.metrics.likes || 0) +\n                            (post.metrics.comments || 0) +\n                            (post.metrics.shares || 0) +\n                            (post.metrics.saves || 0);\n    const reach = post.metrics.reach || post.metrics.views || 0;\n\n    const engagementRate = reach > 0\n      ? Math.round((totalInteractions / reach) * 100 * 100) / 100\n      : 0;\n\n    const postedDate = new Date(post.posted_at);\n    const publishedHour = postedDate.getHours();\n    const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];\n    const publishedDay = daysOfWeek[postedDate.getDay()];\n\n    return {\n      ...post,\n      published_hour: publishedHour,\n      published_day: publishedDay,\n      engagement_rate: engagementRate,\n      created_at: new Date().toISOString(),\n      updated_at: new Date().toISOString()\n    };\n  });\n}\n\nreturn calculateMetrics(this.input);"
+      },
+      "id": "Calculate_Engagement",
+      "name": "Calculate Engagement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{ $secrets.SUPABASE_PROJECT }}.supabase.co/rest/v1/paula_social_posts",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": {
+          "json": "{{ $json }}"
+        }
+      },
+      "id": "Insert_Posts_Supabase",
+      "name": "Insert Posts to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1300,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function createDailySnapshot(posts) {\n  const platforms = ['linkedin', 'instagram', 'tiktok', 'youtube'];\n  const today = new Date().toISOString().split('T')[0];\n\n  const snapshots = platforms.map(platform => {\n    const platformPosts = posts.filter(p => p.platform === platform);\n    const avgEngagement = platformPosts.length > 0\n      ? platformPosts.reduce((sum, p) => sum + p.engagement_rate, 0) / platformPosts.length\n      : 0;\n\n    return {\n      date: today,\n      platform: platform,\n      followers: 0,\n      following: 0,\n      posts_published: platformPosts.length,\n      avg_engagement_rate: Math.round(avgEngagement * 100) / 100,\n      total_reach: platformPosts.reduce((sum, p) => sum + (p.metrics.reach || 0), 0),\n      total_impressions: platformPosts.reduce((sum, p) => sum + (p.metrics.views || 0), 0),\n      growth_vs_yesterday: 0,\n      growth_vs_7_days_ago: 0,\n      growth_vs_30_days_ago: 0,\n      growth_vs_90_days_ago: 0,\n      created_at: new Date().toISOString(),\n      updated_at: new Date().toISOString()\n    };\n  });\n\n  return snapshots;\n}\n\nreturn createDailySnapshot(this.input);"
+      },
+      "id": "Create_Daily_Snapshot",
+      "name": "Create Daily Snapshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{ $secrets.SUPABASE_PROJECT }}.supabase.co/rest/v1/paula_social_daily_snapshot",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": {
+          "json": "{{ $json }}"
+        }
+      },
+      "id": "Insert_Snapshots_Supabase",
+      "name": "Insert Snapshots to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1500,
+        350
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule_Trigger": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn_Scraper",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Instagram_Scraper",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TikTok_Scraper",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "YouTube_Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn_Scraper": {
+      "main": [
+        [
+          {
+            "node": "Merge_Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram_Scraper": {
+      "main": [
+        [
+          {
+            "node": "Merge_Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "TikTok_Scraper": {
+      "main": [
+        [
+          {
+            "node": "Merge_Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "YouTube_Scraper": {
+      "main": [
+        [
+          {
+            "node": "Merge_Results",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge_Results": {
+      "main": [
+        [
+          {
+            "node": "Transform_Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform_Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate_Engagement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate_Engagement": {
+      "main": [
+        [
+          {
+            "node": "Insert_Posts_Supabase",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create_Daily_Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create_Daily_Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Insert_Snapshots_Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
