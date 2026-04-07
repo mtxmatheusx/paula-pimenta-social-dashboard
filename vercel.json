@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd dashboard-vercel && npm run build",
+  "outputDirectory": "dashboard-vercel/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
