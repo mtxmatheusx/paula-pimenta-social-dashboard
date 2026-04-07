@@ -12,6 +12,7 @@ type View = 'overview' | 'linkedin' | 'instagram' | 'tiktok' | 'youtube' | 'comp
 
 export function App() {
   const [activeView, setActiveView] = useState<View>('overview');
+  // Version: 2026-04-07-rebuild-trigger
 
   const navItems = [
     { id: 'overview' as const, label: 'Overview' },
