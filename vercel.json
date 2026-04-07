@@ -1,5 +1,8 @@
 {
-  "root": "dashboard-vercel",
+  "buildCommand": "cd dashboard-vercel && npm ci && npm run build",
+  "outputDirectory": "./dashboard-vercel/dist",
+  "cleanUrls": true,
+  "trailingSlash": false,
   "rewrites": [
     {
       "source": "/(.*)",
